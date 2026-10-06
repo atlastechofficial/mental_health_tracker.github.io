@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-black">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Трекер ментального здоровья</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        apple: {
+                            black: '#000000',
+                            dark: '#1C1C1E',
+                            card: '#2C2C2E',
+                            border: '#3A3A3C',
+                            grayText: '#8E8E93',
+                            green: '#34C759',    // Отличное состояние
+                            blue: '#30B0C7',     // Нормальное состояние
+                            yellow: '#FFCC00',   // Удовлетворительное
+                            red: '#FF3B30',      // Требует внимания
+                            pink: '#FF2D55',     // Акцент
+                            purple: '#AF52DE',   // Энергия/Спокойствие
+                            ringBg: '#2C2C2E'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #000000;
+            color: #FFFFFF;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Apple Fitness visual glow effects */
+        .ring-glow-green { filter: drop-shadow(0 0 6px rgba(52, 199, 89, 0.6)); }
+        .ring-glow-blue { filter: drop-shadow(0 0 6px rgba(48, 176, 199, 0.6)); }
+        .ring-glow-pink { filter: drop-shadow(0 0 6px rgba(255, 45, 85, 0.6)); }
+
+        .glass-panel {
+            background: rgba(28, 28, 30, 0.82);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .screen {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.25s ease-in-out, transform 0.25s ease-in-out;
+            transform: translateY(6px);
+        }
+        
+        .screen.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Ring animations */
+        .ring-progress {
+            transition: stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.4s ease;
+            transform-origin: center;
+            transform: rotate(-90deg);
+        }
+
+        /* Calendar grid */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000000; }
+        ::-webkit-scrollbar-thumb { background: #3A3A3C; border-radius: 999px; }
+
+        /* Status themes */
+        .status-excellent { color: #34C759; }
+        .status-good { color: #30B0C7; }
+        .status-fair { color: #FFCC00; }
+        .status-poor { color: #FF3B30; }
+
+        .bg-status-excellent { background-color: #34C759; }
+        .bg-status-good { background-color: #30B0C7; }
+        .bg-status-fair { background-color: #FFCC00; }
+        .bg-status-poor { background-color: #FF3B30; }
+
+        .badge-excellent { background: rgba(52, 199, 89, 0.15); color: #34C759; border: 1px solid rgba(52, 199, 89, 0.3); }
+        .badge-good { background: rgba(48, 176, 199, 0.15); color: #30B0C7; border: 1px solid rgba(48, 176, 199, 0.3); }
+        .badge-fair { background: rgba(255, 204, 0, 0.15); color: #FFCC00; border: 1px solid rgba(255, 204, 0, 0.3); }
+        .badge-poor { background: rgba(255, 59, 48, 0.15); color: #FF3B30; border: 1px solid rgba(255, 59, 48, 0.3); }
+    </style>
+</head>
+<body class="min-h-full flex flex-col font-sans bg-black antialiased">
+
+    <!-- Top Glass Header -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-apple-card/60 px-5 py-4">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div>
+                <span class="text-xs font-semibold text-apple-grayText uppercase tracking-wider block" id="headerSubtitle">Сводка</span>
+                <h1 class="text-2xl font-bold tracking-tight text-white" id="headerTitle">Трекер ментального здоровья</h1>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button id="btnNotifications" onclick="requestNotificationPermission()" class="p-2.5 rounded-full bg-apple-dark hover:bg-apple-card text-apple-pink transition active:scale-95 relative" title="Уведомления">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    <span id="notifBadge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-apple-pink rounded-full ring-2 ring-black"></span>
+                </button>
+                <button onclick="openSettingsModal()" class="p-2.5 rounded-full bg-apple-dark hover:bg-apple-card text-white transition active:scale-95" title="Настройки">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-md w-full mx-auto px-5 pt-5 pb-24">
+
+        <!-- SCREEN 1: DASHBOARD (СВОДКА) -->
+        <section id="screenDashboard" class="screen active">
+            
+            <!-- Apple Fitness Tri-Rings Display -->
+            <div class="bg-apple-dark rounded-3xl p-6 mb-6 shadow-2xl border border-apple-border/40 relative overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-semibold text-apple-grayText uppercase tracking-wider">Кольца активности</span>
+                    <span id="dashLastCheckTime" class="text-xs text-apple-grayText">Нет данных</span>
+                </div>
+
+                <div class="flex items-center justify-around py-2">
+                    <!-- Concentric Rings SVG -->
+                    <div class="relative w-48 h-48 flex items-center justify-center">
+                        <svg class="w-full h-full" viewBox="0 0 100 100">
+                            <!-- Outer Ring: Mood / Эмоции (Pink) -->
+                            <circle cx="50" cy="50" r="40" stroke="#2C2C2E" stroke-width="7" fill="none" />
+                            <circle id="ringMood" class="ring-progress ring-glow-pink" cx="50" cy="50" r="40" stroke="#FF2D55" stroke-width="7" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="251.2" fill="none" />
+
+                            <!-- Middle Ring: Energy / Энергия (Green) -->
+                            <circle cx="50" cy="50" r="30" stroke="#2C2C2E" stroke-width="7" fill="none" />
+                            <circle id="ringEnergy" class="ring-progress ring-glow-green" cx="50" cy="50" r="30" stroke="#34C759" stroke-width="7" stroke-linecap="round" stroke-dasharray="188.4" stroke-dashoffset="188.4" fill="none" />
+
+                            <!-- Inner Ring: Calmness / Спокойствие (Blue) -->
+                            <circle cx="50" cy="50" r="20" stroke="#2C2C2E" stroke-width="7" fill="none" />
+                            <circle id="ringCalm" class="ring-progress ring-glow-blue" cx="50" cy="50" r="20" stroke="#30B0C7" stroke-width="7" stroke-linecap="round" stroke-dasharray="125.6" stroke-dashoffset="125.6" fill="none" />
+                        </svg>
+
+                        <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                            <span class="text-3xl font-black tracking-tight" id="dashTotalScore">--</span>
+                            <span class="text-[11px] font-semibold text-apple-grayText uppercase tracking-wider">Индекс</span>
+                        </div>
+                    </div>
+
+                    <!-- Ring Legend -->
+                    <div class="flex flex-col space-y-3 pl-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-apple-pink"></span>
+                            <div>
+                                <p class="text-[11px] text-apple-grayText">Настроение</p>
+                                <p class="text-sm font-bold text-white" id="valMood">--%</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-apple-green"></span>
+                            <div>
+                                <p class="text-[11px] text-apple-grayText">Энергия</p>
+                                <p class="text-sm font-bold text-white" id="valEnergy">--%</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-apple-blue"></span>
+                            <div>
+                                <p class="text-[11px] text-apple-grayText">Спокойствие</p>
+                                <p class="text-sm font-bold text-white" id="valCalm">--%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="statusBadgeContainer" class="mt-4 pt-4 border-t border-apple-card flex items-center justify-between">
+                    <span class="text-xs font-semibold text-apple-grayText">Общий уровень:</span>
+                    <span id="dashStatusBadge" class="px-3 py-1 rounded-full text-xs font-bold badge-good">Заполните опрос</span>
+                </div>
+            </div>
+
+            <!-- 3-Day Test Banner / Reminder -->
+            <div id="testReminderCard" class="bg-gradient-to-r from-apple-dark to-apple-card rounded-3xl p-5 mb-6 border border-apple-pink/30 shadow-lg relative overflow-hidden">
+                <div class="flex items-start justify-between">
+                    <div class="pr-2">
+                        <span id="reminderTag" class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-apple-pink/20 text-apple-pink mb-2">
+                            Периодичность: 3 дня
+                        </span>
+                        <h2 class="text-lg font-bold text-white mb-1" id="reminderTitle">Пора пройти опрос</h2>
+                        <p class="text-xs text-apple-grayText leading-relaxed" id="reminderDesc">Регулярная оценка каждые 3 дня помогает точнее выявлять тренды вашего ментального состояния.</p>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 rounded-2xl bg-apple-pink/10 border border-apple-pink/30 flex items-center justify-center text-apple-pink">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 flex items-center justify-between border-t border-white/5">
+                    <span class="text-xs font-medium text-apple-grayText" id="reminderCountdownText">Запись отсутствует</span>
+                    <button onclick="startTest()" class="bg-apple-pink hover:bg-pink-600 text-white text-xs font-bold py-2.5 px-5 rounded-full transition transform active:scale-95 shadow-lg shadow-pink-500/20">
+                        Пройти тест
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-apple-dark rounded-2xl p-4 border border-apple-border/30">
+                    <div class="flex items-center space-x-2 text-apple-grayText mb-1">
+                        <svg class="w-4 h-4 text-apple-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <span class="text-[11px] font-semibold uppercase tracking-wider">Серия (Дней)</span>
+                    </div>
+                    <p class="text-2xl font-bold text-white" id="statStreak">0</p>
+                </div>
+
+                <div class="bg-apple-dark rounded-2xl p-4 border border-apple-border/30">
+                    <div class="flex items-center space-x-2 text-apple-grayText mb-1">
+                        <svg class="w-4 h-4 text-apple-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"></path></svg>
+                        <span class="text-[11px] font-semibold uppercase tracking-wider">Всего тестов</span>
+                    </div>
+                    <p class="text-2xl font-bold text-white" id="statTotalTests">0</p>
+                </div>
+            </div>
+
+            <!-- Quick Note / Mood Journal Log -->
+            <div class="bg-apple-dark rounded-3xl p-5 border border-apple-border/30">
+                <h3 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+                    <span>Заметка самочувствия</span>
+                    <span class="text-xs text-apple-grayText font-normal">Сегодня</span>
+                </h3>
+                <textarea id="dashNoteInput" rows="2" placeholder="Как вы себя чувствуете сегодня? (Запишите мысли или эмоции)..." class="w-full bg-apple-card text-xs text-white p-3 rounded-2xl border border-apple-border focus:outline-none focus:border-apple-pink transition resize-none"></textarea>
+                <div class="mt-2 flex justify-end">
+                    <button onclick="saveQuickNote()" class="bg-apple-card hover:bg-apple-border text-white text-xs font-semibold py-1.5 px-4 rounded-full transition">
+                        Сохранить заметку
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 2: QUESTIONNAIRE (ТЕСТ) -->
+        <section id="screenTest" class="screen">
+            <div class="mb-6 flex items-center justify-between">
+                <button onclick="switchScreen('screenDashboard')" class="text-apple-pink text-sm font-medium flex items-center hover:opacity-80 transition">
+                    <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    Выйти
+                </button>
+                <span class="text-xs font-semibold text-apple-grayText" id="testProgressCounter">Вопрос 1 из 6</span>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="w-full bg-apple-card rounded-full h-1.5 mb-8 overflow-hidden">
+                <div id="testProgressBar" class="bg-gradient-to-r from-apple-pink to-apple-purple h-full rounded-full transition-all duration-300" style="width: 16.6%"></div>
+            </div>
+
+            <!-- Question Card -->
+            <div id="questionCard" class="bg-apple-dark rounded-3xl p-6 border border-apple-border/40 shadow-2xl min-h-[340px] flex flex-col justify-between">
+                <div>
+                    <span id="questionCategory" class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-apple-purple/20 text-apple-purple mb-3">
+                        Эмоциональный фон
+                    </span>
+                    <h2 id="questionText" class="text-xl font-bold text-white leading-snug mb-6">
+                        Загрузка вопроса...
+                    </h2>
+                    
+                    <div id="questionOptions" class="space-y-3">
+                        <!-- Dynamic Options Generated via JS -->
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-apple-card flex items-center justify-between text-xs text-apple-grayText">
+                    <span>Выберите наиболее подходящий вариант</span>
+                    <span id="questionDimension">Сфера: Настроение</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 3: CALENDAR (КАЛЕНДАРЬ) -->
+        <section id="screenCalendar" class="screen">
+            <div class="bg-apple-dark rounded-3xl p-5 mb-6 border border-apple-border/40 shadow-xl">
+                <!-- Month Navigator -->
+                <div class="flex items-center justify-between mb-6">
+                    <button onclick="changeCalendarMonth(-1)" class="p-2 rounded-full bg-apple-card hover:bg-apple-border text-apple-grayText hover:text-white transition active:scale-95">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <h2 class="text-lg font-bold text-white tracking-tight" id="calendarMonthYearTitle">Октябрь 2026</h2>
+                    <button onclick="changeCalendarMonth(1)" class="p-2 rounded-full bg-apple-card hover:bg-apple-border text-apple-grayText hover:text-white transition active:scale-95">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Weekday Headers -->
+                <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-apple-grayText mb-3">
+                    <div>ПН</div><div>ВТ</div><div>СР</div><div>ЧТ</div><div>ПТ</div><div>СБ</div><div>ВС</div>
+                </div>
+
+                <!-- Days Grid -->
+                <div id="calendarDaysGrid" class="calendar-grid">
+                    <!-- Dynamic Days Generated via JS -->
+                </div>
+            </div>
+
+            <!-- Legend & Stats Card -->
+            <div class="bg-apple-dark rounded-3xl p-5 border border-apple-border/40">
+                <h3 class="text-xs font-bold text-apple-grayText uppercase tracking-wider mb-4">Легенда состояний</h3>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="flex items-center space-x-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-apple-green shadow-sm shadow-green-500/50"></span>
+                        <span class="text-white">Отличное (80-100%)</span>
+                    </div>
+                    <div class="flex items-center space-x-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-apple-blue shadow-sm shadow-blue-500/50"></span>
+                        <span class="text-white">Хорошее (60-79%)</span>
+                    </div>
+                    <div class="flex items-center space-x-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-apple-yellow shadow-sm shadow-yellow-500/50"></span>
+                        <span class="text-white">Удовл. (40-59%)</span>
+                    </div>
+                    <div class="flex items-center space-x-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-apple-red shadow-sm shadow-red-500/50"></span>
+                        <span class="text-white">Внимание (&lt;40%)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 4: REPORTS (ОТЧЕТЫ ЗА МЕСЯЦ) -->
+        <section id="screenReport" class="screen">
+            <div id="reportContainer">
+                <!-- Dynamic Monthly Report Content Generated via JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity duration-300">
+        <div class="bg-apple-dark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 border border-apple-border/60 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-4 border-b border-apple-card mb-5">
+                <h3 class="text-lg font-bold text-white">Настройки и данные</h3>
+                <button onclick="closeSettingsModal()" class="text-apple-grayText hover:text-white p-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="text-apple-grayText uppercase font-semibold block mb-2">Уведомления</label>
+                    <button onclick="testNotificationTrigger()" class="w-full bg-apple-card hover:bg-apple-border text-white font-semibold p-3.5 rounded-2xl flex items-center justify-between transition">
+                        <span>Проверить системное уведомление</span>
+                        <svg class="w-4 h-4 text-apple-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    </button>
+                </div>
+
+                <div class="pt-2">
+                    <label class="text-apple-grayText uppercase font-semibold block mb-2">Управление памятью</label>
+                    <button onclick="clearAllData()" class="w-full bg-apple-red/10 border border-apple-red/30 text-apple-red font-semibold p-3 rounded-xl hover:bg-apple-red/20 transition">
+                        Сбросить все данные
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Apple-Style Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 glass-panel border-t border-apple-card/80 pb-safe">
+        <div class="max-w-md mx-auto flex items-center justify-around py-2.5 px-3">
+            <button onclick="switchScreen('screenDashboard')" class="nav-btn active flex flex-col items-center gap-1 text-apple-pink transition" data-target="screenDashboard">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                <span class="text-[10px] font-semibold">Сводка</span>
+            </button>
+            <button onclick="switchScreen('screenCalendar')" class="nav-btn flex flex-col items-center gap-1 text-apple-grayText transition" data-target="screenCalendar">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <span class="text-[10px] font-semibold">Календарь</span>
+            </button>
+            <button onclick="switchScreen('screenReport')" class="nav-btn flex flex-col items-center gap-1 text-apple-grayText transition" data-target="screenReport">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"></path></svg>
+                <span class="text-[10px] font-semibold">Отчеты</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- In-App Notification Toast Container -->
+    <div id="toastContainer" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md pointer-events-none space-y-2"></div>
+
+    <script>
+        const APP_STORAGE_KEY = 'apple_fitness_mental_health_db_v2';
+
+        let appState = {
+            records: [], // Array of { id, date: 'YYYY-MM-DD', timestamp, scoreMood, scoreEnergy, scoreCalm, totalScore, status, note }
+            lastNotificationCheck: null,
+            lastMonthlyReportSent: null
+        };
+
+        const questionBank = [
+            {
+                id: 'q1',
+                category: 'Эмоциональный фон',
+                dimension: 'Mood',
+                text: 'Как бы вы оценили ваше преобладающее эмоциональное состояние за последние дни?',
+                options: [
+                    { label: 'Прекрасное, оптимистичное и жизнерадостное', points: 3 },
+                    { label: 'Стабильное, в целом хорошее', points: 2 },
+                    { label: 'Переменчивое, периодами подавленное', points: 1 },
+                    { label: 'Постоянная грусть, апатия или опустошенность', points: 0 }
+                ]
+            },
+            {
+                id: 'q2',
+                category: 'Уровень энергии',
+                dimension: 'Energy',
+                text: 'Насколько легко вам удается справляться с повседневными задачами и чувствовать бодрость?',
+                options: [
+                    { label: 'Полон энергии, мотивирован на новые дела', points: 3 },
+                    { label: 'Нормальный уровень сил, справляюсь с планами', points: 2 },
+                    { label: 'Быстро устаю, приходится заставлять себя', points: 1 },
+                    { label: 'Полный упадок сил и глубокая истощенность', points: 0 }
+                ]
+            },
+            {
+                id: 'q3',
+                category: 'Тревожность и стресс',
+                dimension: 'Calm',
+                text: 'Беспокоили ли вас чувство тревоги, внутреннее напряжение или беспокойные мысли?',
+                options: [
+                    { label: 'Чувствую полное спокойствие и умиротворение', points: 3 },
+                    { label: 'Легкое волнение по поводу конкретных дел', points: 2 },
+                    { label: 'Частая тревога, трудно расслабиться', points: 1 },
+                    { label: 'Постоянный сильный стресс или фоновая паника', points: 0 }
+                ]
+            },
+            {
+                id: 'q4',
+                category: 'Восстановление и сон',
+                dimension: 'Calm',
+                text: 'Каково качество вашего сна и чувствуете ли вы себя отдохнувшим по утрам?',
+                options: [
+                    { label: 'Крепкий сон, просыпаюсь свежим и отдохнувшим', points: 3 },
+                    { label: 'Вполне нормальный сон, засыпаю легко', points: 2 },
+                    { label: 'Беспокойный сон, периодическая бессонница', points: 1 },
+                    { label: 'Тяжелые проблемы со сном / постоянный недосып', points: 0 }
+                ]
+            },
+            {
+                id: 'q5',
+                category: 'Концентрация и фокус',
+                dimension: 'Energy',
+                text: 'Насколько легко вам удерживать внимание и принимать повседневные решения?',
+                options: [
+                    { label: 'Отличный фокус и ясный ум', points: 3 },
+                    { label: 'Обычная концентрация внимания', points: 2 },
+                    { label: 'Рассеянность, сложно сосредоточиться', points: 1 },
+                    { label: 'Катострофическая туманность в голове', points: 0 }
+                ]
+            },
+            {
+                id: 'q6',
+                category: 'Социальный контакт',
+                dimension: 'Mood',
+                text: 'Чувствуете ли вы желание общаться с близкими и поддерживать социальные связи?',
+                options: [
+                    { label: 'С удовольствием общаюсь и делюсь эмоциями', points: 3 },
+                    { label: 'Комфортно в привычном круге общения', points: 2 },
+                    { label: 'Хочется побыть в одиночестве, избегаю контактов', points: 1 },
+                    { label: 'Полная изоляция, чувство отчуждения от людей', points: 0 }
+                ]
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let testAnswers = [];
+        let viewCalendarDate = new Date();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDatabase();
+            initHeaderDate();
+            checkAndTrigger3DayReminder();
+            checkAndTriggerMonthlyReportNotification();
+            updateDashboardView();
+        });
+
+        function loadDatabase() {
+            try {
+                const raw = localStorage.getItem(APP_STORAGE_KEY);
+                if (raw) {
+                    appState = JSON.parse(raw);
+                }
+            } catch (e) {
+                console.error("Failed to load local storage data", e);
+            }
+        }
+
+        function saveDatabase() {
+            try {
+                localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(appState));
+            } catch (e) {
+                console.error("Failed to save local storage data", e);
+            }
+        }
+
+        function formatDateKey(dateObj) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDisplayDate(dateStr) {
+            if (!dateStr) return 'Никогда';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+        }
+
+        function initHeaderDate() {
+            const today = new Date();
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            document.getElementById('headerSubtitle').innerText = today.toLocaleDateString('ru-RU', options).toUpperCase();
+        }
+
+        function switchScreen(screenId) {
+            // Tab visual update
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const target = btn.getAttribute('data-target');
+                if (target === screenId) {
+                    btn.classList.remove('text-apple-grayText');
+                    btn.classList.add('text-apple-pink');
+                } else {
+                    btn.classList.remove('text-apple-pink');
+                    btn.classList.add('text-apple-grayText');
+                }
+            });
+
+            // Hide active screens
+            document.querySelectorAll('.screen').forEach(s => {
+                s.classList.remove('active');
+            });
+
+            // Show target
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+                targetScreen.classList.add('active');
+            }
+
+            // Headers & screen specific logic
+            const titles = {
+                'screenDashboard': 'Трекер ментального здоровья',
+                'screenTest': 'Опрос самочувствия',
+                'screenCalendar': 'Календарь здоровья',
+                'screenReport': 'Месячные отчеты'
+            };
+            document.getElementById('headerTitle').innerText = titles[screenId] || 'Трекер';
+
+            if (screenId === 'screenDashboard') updateDashboardView();
+            if (screenId === 'screenCalendar') renderCalendarView();
+            if (screenId === 'screenReport') renderMonthlyReportsView();
+        }
+
+        function startTest() {
+            currentQuestionIndex = 0;
+            testAnswers = [];
+            switchScreen('screenTest');
+            renderQuestionStep();
+        }
+
+        function renderQuestionStep() {
+            const q = questionBank[currentQuestionIndex];
+            const total = questionBank.length;
+
+            document.getElementById('testProgressCounter').innerText = `Вопрос ${currentQuestionIndex + 1} из ${total}`;
+            document.getElementById('testProgressBar').style.width = `${((currentQuestionIndex + 1) / total) * 100}%`;
+
+            document.getElementById('questionCategory').innerText = q.category;
+            document.getElementById('questionText').innerText = q.text;
+            document.getElementById('questionDimension').innerText = `Сфера: ${getDimensionLabel(q.dimension)}`;
+
+            const container = document.getElementById('questionOptions');
+            container.innerHTML = '';
+
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left bg-apple-card hover:bg-apple-border active:bg-apple-pink active:text-white p-4 rounded-2xl border border-apple-border/40 transition-all duration-150 text-xs sm:text-sm font-medium text-white flex items-center justify-between group';
+                btn.onclick = () => selectAnswer(opt.points, q.dimension);
+                btn.innerHTML = `
+                    <span>${opt.label}</span>
+                    <span class="w-5 h-5 rounded-full border border-apple-border flex items-center justify-center group-hover:border-apple-pink transition">
+                        <span class="w-2 h-2 rounded-full bg-apple-pink opacity-0 group-hover:opacity-100 transition"></span>
+                    </span>
+                `;
+                container.appendChild(btn);
+            });
+        }
+
+        function getDimensionLabel(dim) {
+            if (dim === 'Mood') return 'Настроение';
+            if (dim === 'Energy') return 'Энергия';
+            if (dim === 'Calm') return 'Спокойствие';
+            return 'Общее';
+        }
+
+        function selectAnswer(points, dimension) {
+            testAnswers.push({ points, dimension });
+            currentQuestionIndex++;
+
+            if (currentQuestionIndex < questionBank.length) {
+                renderQuestionStep();
+            } else {
+                finishQuestionnaire();
+            }
+        }
+
+        function finishQuestionnaire() {
+            // Calculate Scores
+            let moodPoints = 0, moodMax = 0;
+            let energyPoints = 0, energyMax = 0;
+            let calmPoints = 0, calmMax = 0;
+
+            testAnswers.forEach(ans => {
+                if (ans.dimension === 'Mood') { moodPoints += ans.points; moodMax += 3; }
+                if (ans.dimension === 'Energy') { energyPoints += ans.points; energyMax += 3; }
+                if (ans.dimension === 'Calm') { calmPoints += ans.points; calmMax += 3; }
+            });
+
+            const scoreMood = Math.round((moodPoints / moodMax) * 100);
+            const scoreEnergy = Math.round((energyPoints / energyMax) * 100);
+            const scoreCalm = Math.round((calmPoints / calmMax) * 100);
+            const totalScore = Math.round((scoreMood + scoreEnergy + scoreCalm) / 3);
+
+            let status = 'good';
+            if (totalScore >= 80) status = 'excellent';
+            else if (totalScore >= 60) status = 'good';
+            else if (totalScore >= 40) status = 'fair';
+            else status = 'poor';
+
+            const now = new Date();
+            const dateKey = formatDateKey(now);
+
+            // Existing record replacement or new entry
+            const recordIndex = appState.records.findIndex(r => r.date === dateKey);
+            const recordObj = {
+                id: Date.now(),
+                date: dateKey,
+                timestamp: now.getTime(),
+                scoreMood,
+                scoreEnergy,
+                scoreCalm,
+                totalScore,
+                status,
+                note: document.getElementById('dashNoteInput').value || ''
+            };
+
+            if (recordIndex >= 0) {
+                appState.records[recordIndex] = recordObj;
+            } else {
+                appState.records.push(recordObj);
+            }
+
+            // Sort records chronologically
+            appState.records.sort((a, b) => a.timestamp - b.timestamp);
+
+            saveDatabase();
+            showInAppToast('Опрос завершен!', `Ваш показатель ментального здоровья: ${totalScore}%`);
+            switchScreen('screenDashboard');
+        }
+
+        function updateDashboardView() {
+            const records = appState.records;
+            const totalTestsEl = document.getElementById('statTotalTests');
+            const streakEl = document.getElementById('statStreak');
+            const lastCheckTimeEl = document.getElementById('dashLastCheckTime');
+            
+            totalTestsEl.innerText = records.length;
+            streakEl.innerText = calculateStreak();
+
+            if (records.length === 0) {
+                setRings(0, 0, 0, '--');
+                document.getElementById('dashStatusBadge').innerText = 'Нет данных';
+                document.getElementById('dashStatusBadge').className = 'px-3 py-1 rounded-full text-xs font-bold badge-fair';
+                lastCheckTimeEl.innerText = 'Нет записей';
+                updateReminderCard(null);
+                return;
+            }
+
+            const latest = records[records.length - 1];
+            setRings(latest.scoreMood, latest.scoreEnergy, latest.scoreCalm, `${latest.totalScore}%`);
+            
+            lastCheckTimeEl.innerText = formatDisplayDate(latest.date);
+
+            // Update Status Badge
+            const badge = document.getElementById('dashStatusBadge');
+            const statusNames = {
+                'excellent': 'Отличное состояние',
+                'good': 'Хорошее состояние',
+                'fair': 'Удовлетворительное',
+                'poor': 'Требует внимания'
+            };
+            badge.innerText = statusNames[latest.status] || 'Заполнено';
+            badge.className = `px-3 py-1 rounded-full text-xs font-bold badge-${latest.status}`;
+
+            updateReminderCard(latest);
+        }
+
+        function setRings(moodPct, energyPct, calmPct, scoreText) {
+            document.getElementById('dashTotalScore').innerText = scoreText;
+
+            document.getElementById('valMood').innerText = `${moodPct}%`;
+            document.getElementById('valEnergy').innerText = `${energyPct}%`;
+            document.getElementById('valCalm').innerText = `${calmPct}%`;
+
+            // SVG stroke-dashoffset calculations
+            // Mood ring r=40 (Circumference ~ 251.2)
+            const moodCirc = 251.2;
+            const moodOffset = moodCirc - (moodCirc * (moodPct / 100));
+            document.getElementById('ringMood').style.strokeDashoffset = moodOffset;
+
+            // Energy ring r=30 (Circumference ~ 188.4)
+            const energyCirc = 188.4;
+            const energyOffset = energyCirc - (energyCirc * (energyPct / 100));
+            document.getElementById('ringEnergy').style.strokeDashoffset = energyOffset;
+
+            // Calm ring r=20 (Circumference ~ 125.6)
+            const calmCirc = 125.6;
+            const calmOffset = calmCirc - (calmCirc * (calmPct / 100));
+            document.getElementById('ringCalm').style.strokeDashoffset = calmOffset;
+        }
+
+        function updateReminderCard(latestRecord) {
+            const titleEl = document.getElementById('reminderTitle');
+            const descEl = document.getElementById('reminderDesc');
+            const countdownEl = document.getElementById('reminderCountdownText');
+
+            if (!latestRecord) {
+                titleEl.innerText = 'Первая проверка';
+                descEl.innerText = 'Пройдите короткий опрос, чтобы сформировать кольца активности ментального здоровья.';
+                countdownEl.innerText = 'Тест еще не проходился';
+                return;
+            }
+
+            const now = new Date();
+            const lastDate = new Date(latestRecord.timestamp);
+            const diffMs = now - lastDate;
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffDays >= 3) {
+                titleEl.innerText = 'Пора пройти опрос!';
+                descEl.innerText = `Прошло ${diffDays} дн. с последней записи. Обновите ваши кольца активности.`;
+                countdownEl.innerText = 'Опрос доступен сейчас';
+            } else {
+                const daysLeft = 3 - diffDays;
+                titleEl.innerText = 'Все актуально';
+                descEl.innerText = `Результаты получены ${formatDisplayDate(latestRecord.date)}. Следующий обязательный опрос рекомендован через ${daysLeft} дн.`;
+                countdownEl.innerText = `След. проверка через ${daysLeft} дн.`;
+            }
+        }
+
+        function calculateStreak() {
+            if (appState.records.length === 0) return 0;
+
+            const dates = Array.from(new Set(appState.records.map(r => r.date))).sort();
+            let streak = 1;
+            
+            for (let i = dates.length - 1; i > 0; i--) {
+                const d1 = new Date(dates[i]);
+                const d2 = new Date(dates[i - 1]);
+                const diffTime = Math.abs(d1 - d2);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays <= 3) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+            return streak;
+        }
+
+        function saveQuickNote() {
+            const text = document.getElementById('dashNoteInput').value.trim();
+            if (!text) return;
+
+            const todayKey = formatDateKey(new Date());
+            const record = appState.records.find(r => r.date === todayKey);
+
+            if (record) {
+                record.note = text;
+                saveDatabase();
+                showInAppToast('Заметка сохранена', 'Текст успешно прикреплен к сегодняшнему дню.');
+            } else {
+                showInAppToast('Информация', 'Сначала пройдите опрос за сегодня, чтобы прикрепить заметку.');
+            }
+        }
+
+        function renderCalendarView() {
+            const grid = document.getElementById('calendarDaysGrid');
+            const titleEl = document.getElementById('calendarMonthYearTitle');
+
+            const year = viewCalendarDate.getFullYear();
+            const month = viewCalendarDate.getMonth();
+
+            const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+            titleEl.innerText = `${monthNames[month]} ${year}`;
+
+            grid.innerHTML = '';
+
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+
+            let startDay = firstDay.getDay() - 1; // Mon = 0
+            if (startDay === -1) startDay = 6; // Sunday fix
+
+            // Empty padding slots
+            for (let i = 0; i < startDay; i++) {
+                grid.innerHTML += `<div class="aspect-square"></div>`;
+            }
+
+            // Map records by date string YYYY-MM-DD
+            const recordMap = {};
+            appState.records.forEach(r => {
+                recordMap[r.date] = r;
+            });
+
+            const todayKey = formatDateKey(new Date());
+
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const rec = recordMap[dateKey];
+
+                let bgClass = "bg-apple-dark border border-apple-card text-apple-grayText";
+                let statusDot = "";
+
+                if (rec) {
+                    if (rec.status === 'excellent') { bgClass = "bg-apple-green/20 border border-apple-green/50 text-white font-bold"; statusDot = `<span class="w-2 h-2 rounded-full bg-apple-green shadow-sm shadow-green-500/50"></span>`; }
+                    else if (rec.status === 'good') { bgClass = "bg-apple-blue/20 border border-apple-blue/50 text-white font-bold"; statusDot = `<span class="w-2 h-2 rounded-full bg-apple-blue shadow-sm shadow-blue-500/50"></span>`; }
+                    else if (rec.status === 'fair') { bgClass = "bg-apple-yellow/20 border border-apple-yellow/50 text-white font-bold"; statusDot = `<span class="w-2 h-2 rounded-full bg-apple-yellow shadow-sm shadow-yellow-500/50"></span>`; }
+                    else if (rec.status === 'poor') { bgClass = "bg-apple-red/20 border border-apple-red/50 text-white font-bold"; statusDot = `<span class="w-2 h-2 rounded-full bg-apple-red shadow-sm shadow-red-500/50"></span>`; }
+                }
+
+                const isToday = dateKey === todayKey;
+                const ringHighlight = isToday ? "ring-2 ring-white" : "";
+
+                const dayCard = document.createElement('div');
+                dayCard.className = `aspect-square rounded-2xl flex flex-col items-center justify-center p-1 cursor-pointer transition active:scale-95 ${bgClass} ${ringHighlight}`;
+                dayCard.onclick = () => showDayDetails(dateKey, rec);
+                dayCard.innerHTML = `
+                    <span class="text-xs">${day}</span>
+                    <div class="mt-1">${statusDot}</div>
+                `;
+
+                grid.appendChild(dayCard);
+            }
+        }
+
+        function changeCalendarMonth(delta) {
+            viewCalendarDate.setMonth(viewCalendarDate.getMonth() + delta);
+            renderCalendarView();
+        }
+
+        function showDayDetails(dateKey, record) {
+            if (!record) {
+                showInAppToast(formatDisplayDate(dateKey), 'Записей за этот день нет.');
+                return;
+            }
+
+            const text = `Индекс: ${record.totalScore}% | Настроение: ${record.scoreMood}% | Энергия: ${record.scoreEnergy}% | Спокойствие: ${record.scoreCalm}%`;
+            showInAppToast(`Запись ${formatDisplayDate(dateKey)}`, text);
+        }
+
+        function renderMonthlyReportsView() {
+            const container = document.getElementById('reportContainer');
+
+            if (appState.records.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-apple-dark rounded-3xl p-8 border border-apple-border/40 text-center my-6">
+                        <svg class="w-12 h-12 mx-auto text-apple-grayText mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <h3 class="text-base font-bold text-white mb-1">Нет данных для отчета</h3>
+                        <p class="text-xs text-apple-grayText">Пройдите несколько опросов, чтобы сформировать автоматическую ежемесячную аналитику.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group records by YYYY-MM
+            const monthsMap = {};
+            appState.records.forEach(r => {
+                const monthKey = r.date.substring(0, 7); // 'YYYY-MM'
+                if (!monthsMap[monthKey]) {
+                    monthsMap[monthKey] = [];
+                }
+                monthsMap[monthKey].push(r);
+            });
+
+            const monthKeys = Object.keys(monthsMap).sort().reverse();
+            const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+
+            let html = '';
+
+            monthKeys.forEach(mKey => {
+                const [y, m] = mKey.split('-');
+                const monthTitle = `${monthNames[parseInt(m) - 1]} ${y}`;
+                const list = monthsMap[mKey];
+
+                const avgScore = Math.round(list.reduce((acc, item) => acc + item.totalScore, 0) / list.length);
+                const avgMood = Math.round(list.reduce((acc, item) => acc + item.scoreMood, 0) / list.length);
+                const avgEnergy = Math.round(list.reduce((acc, item) => acc + item.scoreEnergy, 0) / list.length);
+                const avgCalm = Math.round(list.reduce((acc, item) => acc + item.scoreCalm, 0) / list.length);
+
+                // Count states
+                const counts = { excellent: 0, good: 0, fair: 0, poor: 0 };
+                list.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
+
+                html += `
+                    <div class="bg-apple-dark rounded-3xl p-6 mb-6 border border-apple-border/40 shadow-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-apple-grayText">Месячный отчет</span>
+                                <h2 class="text-xl font-bold text-white">${monthTitle}</h2>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-2xl font-black text-apple-pink">${avgScore}%</span>
+                                <span class="block text-[10px] text-apple-grayText uppercase">Средний индекс</span>
+                            </div>
+                        </div>
+
+                        <!-- Progress Distribution Bars -->
+                        <div class="space-y-3 mb-6 bg-apple-card/50 p-4 rounded-2xl border border-apple-border/20">
+                            <h4 class="text-xs font-semibold text-white mb-2">Средние метрики категорий</h4>
+                            ${renderReportBar('Настроение', avgMood, 'bg-apple-pink')}
+                            ${renderReportBar('Энергия', avgEnergy, 'bg-apple-green')}
+                            ${renderReportBar('Спокойствие', avgCalm, 'bg-apple-blue')}
+                        </div>
+
+                        <!-- States Breakdown -->
+                        <div class="grid grid-cols-4 gap-2 text-center pt-2 border-t border-apple-card">
+                            <div class="p-2 bg-apple-card/40 rounded-xl">
+                                <span class="text-base font-bold text-apple-green">${counts.excellent}</span>
+                                <span class="block text-[9px] text-apple-grayText uppercase">Отлично</span>
+                            </div>
+                            <div class="p-2 bg-apple-card/40 rounded-xl">
+                                <span class="text-base font-bold text-apple-blue">${counts.good}</span>
+                                <span class="block text-[9px] text-apple-grayText uppercase">Хорошо</span>
+                            </div>
+                            <div class="p-2 bg-apple-card/40 rounded-xl">
+                                <span class="text-base font-bold text-apple-yellow">${counts.fair}</span>
+                                <span class="block text-[9px] text-apple-grayText uppercase">Удовл.</span>
+                            </div>
+                            <div class="p-2 bg-apple-card/40 rounded-xl">
+                                <span class="text-base font-bold text-apple-red">${counts.poor}</span>
+                                <span class="block text-[9px] text-apple-grayText uppercase">Внимание</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function renderReportBar(label, pct, colorClass) {
+            return `
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-apple-grayText">${label}</span>
+                        <span class="font-bold text-white">${pct}%</span>
+                    </div>
+                    <div class="w-full bg-apple-dark h-2 rounded-full overflow-hidden">
+                        <div class="${colorClass} h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                showInAppToast("Уведомления", "Ваш браузер не поддерживает системные уведомления.");
+                return;
+            }
+
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    document.getElementById('notifBadge').classList.remove('hidden');
+                    showInAppToast("Уведомления включены!", "Вы будете получать напоминания раз в 3 дня и ежемесячные отчеты.");
+                    sendSystemNotification("Трекер Ментального Здоровья", "Напоминания успешно активированы!");
+                } else {
+                    showInAppToast("Уведомления", "Разрешение на отправку уведомлений отклонено.");
+                }
+            });
+        }
+
+        function sendSystemNotification(title, body) {
+            if ("Notification" in window && Notification.permission === "granted") {
+                try {
+                    new Notification(title, {
+                        body: body,
+                        icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%23FF2D55"/></svg>'
+                    });
+                } catch (e) {
+                    console.log("OS Notification restriction", e);
+                }
+            }
+        }
+
+        function checkAndTrigger3DayReminder() {
+            if (appState.records.length === 0) return;
+
+            const latest = appState.records[appState.records.length - 1];
+            const now = new Date();
+            const lastDate = new Date(latest.timestamp);
+            const diffDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
+
+            if (diffDays >= 3) {
+                sendSystemNotification(
+                    "Время пройти опрос ментального здоровья!",
+                    `Прошло ${diffDays} дней с последней проверки. Зайдите в приложение, чтобы обновить кольца активности.`
+                );
+            }
+        }
+
+        function checkAndTriggerMonthlyReportNotification() {
+            const now = new Date();
+            const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            if (appState.lastMonthlyReportSent !== currentMonthKey) {
+                // Trigger notification if there are records from previous period
+                if (appState.records.length > 0) {
+                    sendSystemNotification(
+                        "Готов ваш месячный отчет!",
+                        "Сформирован итоговый отчет о вашем ментальном здоровье за прошедший месяц."
+                    );
+                }
+                appState.lastMonthlyReportSent = currentMonthKey;
+                saveDatabase();
+            }
+        }
+
+        function testNotificationTrigger() {
+            sendSystemNotification(
+                "Тестовое напоминание",
+                "Это пример того, как будут выглядеть ваши регулярные напоминания каждые 3 дня."
+            );
+            showInAppToast("Уведомление отправлено", "Проверьте системную панель вашего устройства.");
+        }
+
+        function showInAppToast(title, message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'bg-apple-dark/95 border border-apple-border text-white p-4 rounded-2xl shadow-2xl backdrop-blur-md transform transition-all duration-300 translate-y-[-10px] opacity-0 pointer-events-auto flex items-start justify-between';
+            
+            toast.innerHTML = `
+                <div>
+                    <h4 class="text-xs font-bold text-apple-pink mb-0.5">${title}</h4>
+                    <p class="text-xs text-apple-grayText leading-tight">${message}</p>
+                </div>
+                <button onclick="this.parentElement.remove()" class="text-apple-grayText hover:text-white text-xs ml-2">✕</button>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function clearAllData() {
+            appState = { records: [], lastNotificationCheck: null, lastMonthlyReportSent: null };
+            saveDatabase();
+            closeSettingsModal();
+            updateDashboardView();
+            showInAppToast("Сброс выполнен", "Все сохраненные данные успешно удалены.");
+        }
+    </script>
+</body>
+</html>
